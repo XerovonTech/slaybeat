@@ -1,0 +1,8 @@
+{
+  "name": "SlayBeat",
+  "description": "A rhythm-based combat game where players defeat AI-generated monsters by hitting notes in sync with music. Features an RPG-style progression system with power levels, EXP, and weapon buffs, integrated with high-quality Gemini image and video generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
