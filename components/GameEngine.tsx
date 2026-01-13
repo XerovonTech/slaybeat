@@ -169,16 +169,27 @@ export const GameEngine: React.FC<Props> = ({ monster, player, onFinish, weapons
     });
   };
 
+  // Play music only on initial start
   useEffect(() => {
-    if (started && !isPaused) {
+    if (started) {
       audioManager.playMusic(monster.songUrl, true, 0.4);
       startRef.current = Date.now();
-    } else if (isPaused) {
+    }
+    return () => {
+       // Stop music on unmount
+       audioManager.stopMusic();
+    };
+  }, [started, monster.songUrl]);
+
+  // Handle Pause/Resume separately to avoid restarting music
+  useEffect(() => {
+    if (!started) return;
+    if (isPaused) {
       audioManager.pauseMusic();
     } else {
       audioManager.resumeMusic();
     }
-  }, [started, isPaused]);
+  }, [isPaused, started]);
 
   useEffect(() => {
     if (started) requestRef.current = requestAnimationFrame(gameLoop);

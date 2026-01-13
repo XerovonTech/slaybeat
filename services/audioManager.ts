@@ -19,6 +19,8 @@ class AudioManager {
     this.soundEnabled = sound;
     if (!music && this.currentMusic) {
       this.currentMusic.pause();
+    } else if (music && this.currentMusic && this.currentMusic.paused) {
+      this.currentMusic.play().catch(() => {});
     }
   }
 
@@ -31,7 +33,7 @@ class AudioManager {
     this.currentMusic = new Audio(url);
     this.currentMusic.loop = loop;
     this.currentMusic.volume = volume;
-    this.currentMusic.play().catch(e => console.warn("Music playback failed:", e));
+    this.currentMusic.play().catch(e => console.warn("Music playback failed (autoplay policy?):", e));
   }
 
   stopMusic() {

@@ -29,6 +29,9 @@ const GlobalHUD: React.FC<{ player: PlayerStats }> = ({ player }) => (
   </div>
 );
 
+const RANK_CYCLE_HOURS = 7;
+const RANK_CYCLE_MS = RANK_CYCLE_HOURS * 60 * 60 * 1000;
+
 const App: React.FC = () => {
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [state, setState] = useState<GameState>(() => {
@@ -42,14 +45,16 @@ const App: React.FC = () => {
   const [revealedDaily, setRevealedDaily] = useState<number | null>(null);
   const [showWeaponIndex, setShowWeaponIndex] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showRewardInfo, setShowRewardInfo] = useState(false);
   const [shopTab, setShopTab] = useState<'lootboxes' | 'characters'>('lootboxes');
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(state.player.username);
   const [weaponToDelete, setWeaponToDelete] = useState<Weapon | null>(null);
 
-  const [lastClaims, setLastClaims] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('last_rank_claims_v220');
-    return saved ? JSON.parse(saved) : { points: 0, coins: 0, level: 0 };
+  // Track the last cycle ID claimed (integer representing 7-hour blocks since epoch)
+  const [lastClaimedCycle, setLastClaimedCycle] = useState<number>(() => {
+    const saved = localStorage.getItem('last_rank_cycle_claim');
+    return saved ? parseInt(saved) : 0;
   });
 
   const [time, setTime] = useState(Date.now());
@@ -181,29 +186,59 @@ const App: React.FC = () => {
     }
   };
 
-  const claimRankReward = (category: string) => {
-    const cooldown = 2 * 60 * 60 * 1000;
-    const last = lastClaims[category] || 0;
-    if (Date.now() - last < cooldown) return alert("Reward on cooldown!");
-    
-    const isRanked = leaderboard.some(e => e.username === state.player.username);
-    if (!isRanked) return alert("Play more to join the ranks!");
+  // Rank Cycle Logic
+  const getCurrentCycleId = () => Math.floor(Date.now() / RANK_CYCLE_MS);
+  const getNextCycleTime = () => (getCurrentCycleId() + 1) * RANK_CYCLE_MS;
+  const canClaimRank = () => getCurrentCycleId() > lastClaimedCycle;
 
-    const r = { coins: 50000, keys: { common: 100, basic: 50, premium: 20 } };
+  const getRankRewards = (rank: number) => {
+    if (rank === 1) return { coins: 5000000, keys: { common: 500, basic: 250, premium: 100 } };
+    if (rank <= 3) return { coins: 2500000, keys: { common: 300, basic: 150, premium: 50 } };
+    if (rank <= 10) return { coins: 1000000, keys: { common: 150, basic: 75, premium: 25 } };
+    if (rank <= 50) return { coins: 500000, keys: { common: 100, basic: 50, premium: 10 } };
+    return { coins: 100000, keys: { common: 50, basic: 10, premium: 0 } };
+  };
+
+  const claimRankReward = () => {
+    if (!canClaimRank()) return alert("Next cycle hasn't started yet! Wait for countdown.");
+    
+    // Sort logic to find actual rank
+    const sorted = [...leaderboard].sort((a,b) => {
+       const valA = (a as any)[rankTab === 'points' ? 'score' : rankTab] || 0;
+       const valB = (b as any)[rankTab === 'points' ? 'score' : rankTab] || 0;
+       return valB - valA;
+    });
+
+    const myRankIndex = sorted.findIndex(e => e.username === state.player.username);
+    if (myRankIndex === -1) return alert("You are unranked! Play a stage to enter the leaderboard.");
+    
+    const rank = myRankIndex + 1;
+    const rewards = getRankRewards(rank);
+
     updatePlayer({
-      coins: state.player.coins + r.coins,
+      coins: state.player.coins + rewards.coins,
       keys: {
-        common: state.player.keys.common + r.keys.common,
-        basic: state.player.keys.basic + r.keys.basic,
-        premium: state.player.keys.premium + r.keys.premium
+        common: state.player.keys.common + rewards.keys.common,
+        basic: state.player.keys.basic + rewards.keys.basic,
+        premium: state.player.keys.premium + rewards.keys.premium
       }
     });
-    setLastClaims(prev => {
-      const next = { ...prev, [category]: Date.now() };
-      localStorage.setItem('last_rank_claims_v220', JSON.stringify(next));
-      return next;
-    });
-    alert(`Weekly ${category} rewards claimed!`);
+
+    const currentCycle = getCurrentCycleId();
+    setLastClaimedCycle(currentCycle);
+    localStorage.setItem('last_rank_cycle_claim', currentCycle.toString());
+
+    audioManager.playSound('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
+    alert(`CLAIMED RANK #${rank} REWARDS!\n+${rewards.coins.toLocaleString()} Coins\n+${rewards.keys.common}🟡 +${rewards.keys.basic}🟢 +${rewards.keys.premium}🔴`);
+  };
+
+  const getCountdownString = () => {
+    const diff = getNextCycleTime() - time;
+    if (diff < 0) return "00:00:00";
+    const h = Math.floor(diff / (1000 * 60 * 60));
+    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((diff % (1000 * 60)) / 1000);
+    return `${h}h ${m}m ${s}s`;
   };
 
   if (!isGameStarted) {
@@ -409,6 +444,36 @@ const App: React.FC = () => {
              </div>
           </div>
         )}
+        
+        {/* REWARD INFO MODAL */}
+        {showRewardInfo && (
+           <div className="fixed inset-0 z-[4000] bg-black/95 backdrop-blur-2xl p-8 flex flex-col animate-in fade-in items-center justify-center">
+             <div className="bg-slate-900 w-full max-w-sm rounded-[3rem] border-2 border-purple-500/30 p-8 shadow-2xl relative">
+                <button onClick={() => setShowRewardInfo(false)} className="absolute top-6 right-6 text-white/50 hover:text-white"><i className="fas fa-times text-xl"></i></button>
+                <h2 className="bungee text-2xl text-purple-400 mb-6 text-center font-black uppercase">PRIZE POOL</h2>
+                <div className="space-y-4">
+                   <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/30">
+                      <div className="bungee text-yellow-400 text-lg font-black">RANK #1</div>
+                      <div className="bungee text-white text-xs">5,000,000 💰</div>
+                      <div className="text-[10px] text-white/60">500🟡 250🟢 100🔴</div>
+                   </div>
+                   <div className="bg-slate-800 p-3 rounded-2xl border border-white/5">
+                      <div className="bungee text-white text-sm font-black">RANK #2 - #3</div>
+                      <div className="bungee text-white/80 text-[10px]">2,500,000 💰</div>
+                   </div>
+                   <div className="bg-slate-800 p-3 rounded-2xl border border-white/5">
+                      <div className="bungee text-white text-sm font-black">RANK #4 - #10</div>
+                      <div className="bungee text-white/80 text-[10px]">1,000,000 💰</div>
+                   </div>
+                   <div className="bg-slate-800 p-3 rounded-2xl border border-white/5">
+                      <div className="bungee text-white text-sm font-black">RANK #11+</div>
+                      <div className="bungee text-white/80 text-[10px]">500,000 - 100,000 💰</div>
+                   </div>
+                </div>
+                <div className="mt-6 text-center bungee text-[8px] text-white/30 uppercase">Resets every 7 hours</div>
+             </div>
+           </div>
+        )}
 
         {showHowToPlay && (
           <div className="fixed inset-0 z-[4000] bg-black/95 backdrop-blur-2xl p-8 flex flex-col animate-in fade-in">
@@ -446,12 +511,23 @@ const App: React.FC = () => {
                   <button key={t} onClick={() => setRankTab(t)} className={`flex-1 py-3 bungee text-[9px] rounded-xl transition-all font-black uppercase ${rankTab === t ? 'bg-purple-600 text-white' : 'text-white/30'}`}>{t}</button>
                 ))}
              </div>
-             <div className="bg-slate-900/60 p-4 rounded-3xl border border-purple-500/20 mb-4 flex justify-between items-center">
-                <div className="flex flex-col">
-                   <span className="bungee text-[8px] text-white/40 uppercase">Claim Rewards</span>
-                   <span className="bungee text-xs text-purple-400 font-black">Rank Period Active</span>
+             <div className="bg-slate-900/60 p-4 rounded-3xl border border-purple-500/20 mb-4 relative overflow-hidden">
+                <div className="flex justify-between items-center relative z-10">
+                   <div className="flex flex-col">
+                      <div className="flex items-center gap-2 mb-1">
+                         <span className="bungee text-[8px] text-white/40 uppercase">Next Reset In</span>
+                         <button onClick={() => setShowRewardInfo(true)} className="text-purple-400 bg-purple-900/40 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border border-purple-500/50">i</button>
+                      </div>
+                      <span className="bungee text-xl text-white font-black tracking-widest font-mono">{getCountdownString()}</span>
+                   </div>
+                   <button 
+                     onClick={claimRankReward} 
+                     disabled={!canClaimRank()}
+                     className={`px-6 py-4 bungee text-[10px] rounded-xl font-black transition-all ${canClaimRank() ? 'bg-green-600 shadow-[0_0_20px_rgba(22,163,74,0.4)] animate-pulse text-white' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+                   >
+                     {canClaimRank() ? 'REDEEM PRIZES' : 'LOCKED'}
+                   </button>
                 </div>
-                <button onClick={() => claimRankReward(rankTab)} className="px-6 py-3 bg-green-600 bungee text-[10px] rounded-xl font-black">CLAIM</button>
              </div>
              <div className="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-2 pb-24">
                 {leaderboard.length > 0 ? leaderboard.sort((a,b) => (b as any)[rankTab === 'points' ? 'score' : rankTab] - (a as any)[rankTab === 'points' ? 'score' : rankTab]).map((entry, i) => (
