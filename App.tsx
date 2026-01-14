@@ -32,11 +32,64 @@ const GlobalHUD: React.FC<{ player: PlayerStats }> = ({ player }) => (
 const RANK_CYCLE_HOURS = 7;
 const RANK_CYCLE_MS = RANK_CYCLE_HOURS * 60 * 60 * 1000;
 
+type NotificationType = 'success' | 'error' | 'info';
+interface Notification {
+  message: string;
+  type: NotificationType;
+  id: number;
+}
+
 const App: React.FC = () => {
   const [isGameStarted, setIsGameStarted] = useState(false);
+  
+  // Custom Notification State
+  const [notification, setNotification] = useState<Notification | null>(null);
+
+  const showNotification = (message: string, type: NotificationType = 'info') => {
+    setNotification({ message, type, id: Date.now() });
+    
+    // SFX for notifications
+    if (type === 'error') {
+       audioManager.playSound('https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3', 0.5);
+    } else if (type === 'success') {
+       audioManager.playSound('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3', 0.5);
+    }
+
+    setTimeout(() => {
+      setNotification(prev => prev && prev.message === message ? null : prev);
+    }, 3000);
+  };
+
   const [state, setState] = useState<GameState>(() => {
     const saved = localStorage.getItem('slay-beat-v220');
-    return saved ? JSON.parse(saved) : { view: GameView.START, player: { ...INITIAL_PLAYER_STATS, lives: 30 }, currentLevel: null };
+    let parsed = saved ? JSON.parse(saved) : { view: GameView.START, player: { ...INITIAL_PLAYER_STATS, lives: 30 }, currentLevel: null };
+    
+    // SANITIZATION: Fix NaN weapons on load
+    if (parsed.player && Array.isArray(parsed.player.inventory)) {
+      parsed.player.inventory = parsed.player.inventory.map((w: any) => {
+         let dmg = w.damage;
+         // Check if damage is broken (NaN, null, undefined, or not finite)
+         if (typeof dmg !== 'number' || isNaN(dmg) || !isFinite(dmg)) {
+            // Attempt to restore from catalog based on name
+            const catalogItem = WEAPON_INDEX.find(ci => ci.name === w.name);
+            if (catalogItem) {
+               dmg = catalogItem.damage;
+               // Re-apply level scaling if weapon was leveled up
+               if ((w.level || 1) > 1) {
+                  dmg = Math.floor(dmg * Math.pow(1.15, (w.level || 1) - 1));
+               }
+            } else {
+               dmg = 500; // Fallback only if not found in catalog
+            }
+         }
+         return { 
+           ...w, 
+           damage: dmg, 
+           level: (typeof w.level !== 'number' || isNaN(w.level)) ? 1 : w.level 
+         };
+      });
+    }
+    return parsed;
   });
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -51,7 +104,6 @@ const App: React.FC = () => {
   const [tempName, setTempName] = useState(state.player.username);
   const [weaponToDelete, setWeaponToDelete] = useState<Weapon | null>(null);
 
-  // Track the last cycle ID claimed (integer representing 7-hour blocks since epoch)
   const [lastClaimedCycle, setLastClaimedCycle] = useState<number>(() => {
     const saved = localStorage.getItem('last_rank_cycle_claim');
     return saved ? parseInt(saved) : 0;
@@ -97,16 +149,17 @@ const App: React.FC = () => {
   };
 
   const saveName = () => {
-    if (tempName.trim().length < 3) return alert("Name too short!");
+    if (tempName.trim().length < 3) return showNotification("Name too short!", 'error');
     updatePlayer({ username: tempName });
     setIsEditingName(false);
+    showNotification("Username updated!", 'success');
   };
 
   const upgradeWeapon = (weaponId: string) => {
     const weapon = state.player.inventory.find(w => w.id === weaponId);
-    if (!weapon || (weapon.level || 1) >= 50) return alert("Max level reached!");
+    if (!weapon || (weapon.level || 1) >= 50) return showNotification("Max level reached!", 'error');
     const cost = (weapon.level || 1) * 2500;
-    if (state.player.coins < cost) return alert(`Need ${cost.toLocaleString()} coins!`);
+    if (state.player.coins < cost) return showNotification(`Need ${cost.toLocaleString()} coins!`, 'error');
 
     audioManager.playSound('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
     updatePlayer({
@@ -117,18 +170,20 @@ const App: React.FC = () => {
           : w
       )
     });
+    showNotification("Weapon Upgraded!", 'success');
   };
 
   const deleteWeaponPermanently = () => {
     if (!weaponToDelete) return;
     if (state.player.equipped.includes(weaponToDelete.id)) {
-      alert("Cannot delete an equipped weapon!");
+      showNotification("Cannot delete an equipped weapon!", 'error');
       setWeaponToDelete(null);
       return;
     }
     updatePlayer({ inventory: state.player.inventory.filter(w => w.id !== weaponToDelete.id) });
     setWeaponToDelete(null);
     audioManager.playSound('https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3');
+    showNotification("Weapon Dismantled", 'info');
   };
 
   const openBox = (tier: string) => {
@@ -136,14 +191,14 @@ const App: React.FC = () => {
     const price = (LOOTBOX_PRICES as any)[tier];
     const kReq = (LOOTBOX_KEY_PRICES as any)[tier];
 
-    if (p.coins < price) return alert("Insufficient coins!");
+    if (p.coins < price) return showNotification("Insufficient coins!", 'error');
 
     if (kReq.combo) {
       if (p.keys.common < kReq.requirements.common || p.keys.basic < kReq.requirements.basic || p.keys.premium < kReq.requirements.premium) {
-        return alert(`Need: ${kReq.requirements.common}🟡 ${kReq.requirements.basic}🟢 ${kReq.requirements.premium}🔴`);
+        return showNotification(`Need: ${kReq.requirements.common}🟡 ${kReq.requirements.basic}🟢 ${kReq.requirements.premium}🔴`, 'error');
       }
     } else if (kReq.amount && (p.keys as any)[kReq.type] < kReq.amount) {
-      return alert(`Need ${kReq.amount} ${kReq.icon} Keys!`);
+      return showNotification(`Need ${kReq.amount} ${kReq.icon} Keys!`, 'error');
     }
 
     let newKeys = { ...p.keys };
@@ -161,7 +216,7 @@ const App: React.FC = () => {
       const success = Math.random() < 0.6;
       if (!success) {
         updatePlayer({ coins: p.coins - price, keys: newKeys });
-        return alert("Recruitment failed!");
+        return showNotification("Recruitment failed!", 'error');
       }
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const currentFrags = p.characters.fragments[char.id] || 0;
@@ -177,16 +232,18 @@ const App: React.FC = () => {
           fragments: { ...p.characters.fragments, [char.id]: newFrags }
         }
       });
-      alert(`Fragment obtained: ${char.name}! (${newFrags}/10)`);
+      showNotification(`Fragment: ${char.name} (${newFrags}/10)`, 'success');
     } else {
       const pool = WEAPON_INDEX.filter(w => w.rarity.toLowerCase() === tier.replace('_', '').toLowerCase());
       const reward = pool[Math.floor(Math.random() * pool.length)];
-      updatePlayer({ coins: p.coins - price, keys: newKeys, inventory: [...p.inventory, { ...reward, id: Date.now().toString(), level: 1 }] });
-      alert(`UNBOXED: ${reward.name} ${reward.icon}`);
+      // Ensure new weapon has valid damage
+      const safeReward = { ...reward, damage: isNaN(reward.damage) ? 500 : reward.damage };
+      
+      updatePlayer({ coins: p.coins - price, keys: newKeys, inventory: [...p.inventory, { ...safeReward, id: Date.now().toString(), level: 1 }] });
+      showNotification(`UNBOXED: ${reward.name}`, 'success');
     }
   };
 
-  // Rank Cycle Logic
   const getCurrentCycleId = () => Math.floor(Date.now() / RANK_CYCLE_MS);
   const getNextCycleTime = () => (getCurrentCycleId() + 1) * RANK_CYCLE_MS;
   const canClaimRank = () => getCurrentCycleId() > lastClaimedCycle;
@@ -200,9 +257,8 @@ const App: React.FC = () => {
   };
 
   const claimRankReward = () => {
-    if (!canClaimRank()) return alert("Next cycle hasn't started yet! Wait for countdown.");
+    if (!canClaimRank()) return showNotification("Wait for cycle reset!", 'error');
     
-    // Sort logic to find actual rank
     const sorted = [...leaderboard].sort((a,b) => {
        const valA = (a as any)[rankTab === 'points' ? 'score' : rankTab] || 0;
        const valB = (b as any)[rankTab === 'points' ? 'score' : rankTab] || 0;
@@ -210,7 +266,7 @@ const App: React.FC = () => {
     });
 
     const myRankIndex = sorted.findIndex(e => e.username === state.player.username);
-    if (myRankIndex === -1) return alert("You are unranked! Play a stage to enter the leaderboard.");
+    if (myRankIndex === -1) return showNotification("Play a stage to get ranked!", 'error');
     
     const rank = myRankIndex + 1;
     const rewards = getRankRewards(rank);
@@ -229,7 +285,7 @@ const App: React.FC = () => {
     localStorage.setItem('last_rank_cycle_claim', currentCycle.toString());
 
     audioManager.playSound('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
-    alert(`CLAIMED RANK #${rank} REWARDS!\n+${rewards.coins.toLocaleString()} Coins\n+${rewards.keys.common}🟡 +${rewards.keys.basic}🟢 +${rewards.keys.premium}🔴`);
+    showNotification(`CLAIMED RANK #${rank} REWARDS!`, 'success');
   };
 
   const getCountdownString = () => {
@@ -239,6 +295,25 @@ const App: React.FC = () => {
     const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const s = Math.floor((diff % (1000 * 60)) / 1000);
     return `${h}h ${m}m ${s}s`;
+  };
+
+  // RENDER HELPERS
+  const renderNotification = () => {
+    if (!notification) return null;
+    return (
+      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border-2 backdrop-blur-md animate-in slide-in-from-top fade-in duration-300 ${
+        notification.type === 'error' ? 'bg-red-950/90 border-red-500 text-red-100' :
+        notification.type === 'success' ? 'bg-green-950/90 border-green-500 text-green-100' :
+        'bg-slate-800/90 border-blue-500 text-blue-100'
+      }`}>
+        <i className={`fas ${
+          notification.type === 'error' ? 'fa-exclamation-triangle' :
+          notification.type === 'success' ? 'fa-check-circle' :
+          'fa-info-circle'
+        } text-xl`}></i>
+        <span className="bungee text-xs font-black tracking-wide uppercase">{notification.message}</span>
+      </div>
+    );
   };
 
   if (!isGameStarted) {
@@ -264,6 +339,8 @@ const App: React.FC = () => {
     <div className="h-screen w-screen bg-[#020617] text-white overflow-hidden flex justify-center items-center font-['Inter']">
       <div className="w-full h-full max-w-md flex flex-col relative overflow-hidden bg-slate-950 shadow-2xl border-x border-white/10">
         
+        {renderNotification()}
+
         {state.view === GameView.START && (
           <div className="flex flex-col h-full p-4 animate-in fade-in relative">
             <div className="flex justify-between items-start z-20 mb-6 h-20">
@@ -628,7 +705,7 @@ const App: React.FC = () => {
             setState(p => ({ ...p, view: GameView.START, currentLevel: null })); 
         }} />}
 
-        {showDaily && <div className="fixed inset-0 z-[1100] bg-black/98 flex items-center justify-center p-6 backdrop-blur-3xl animate-in zoom-in"><div className="bg-slate-900 border-2 border-yellow-500/20 p-10 rounded-[5rem] w-full text-center max-w-sm shadow-2xl"><h2 className="bungee text-4xl text-yellow-500 mb-2 italic uppercase font-black">Vault</h2><p className="bungee text-[10px] text-slate-500 mb-10 uppercase tracking-widest font-black">PICK 1 CARD EVERY 12H</p><div className="grid grid-cols-3 gap-4 mb-10">{Array.from({ length: 6 }).map((_, i) => (<div key={i} onClick={() => { if (revealedDaily !== null) return; const canClaim = Date.now() - (state.player.lastDailyReward || 0) >= 12 * 3600000; if (!canClaim) return alert("VAULT LOCKED!"); setRevealedDaily(i); }} className={`aspect-[2/3] rounded-2xl border-2 flex items-center justify-center transition-all cursor-pointer ${revealedDaily !== null ? (revealedDaily === i ? 'bg-white scale-110 shadow-[0_0_30px_white]' : 'bg-slate-800 border-white/5 opacity-50') : 'bg-slate-800 border-white/5 hover:border-yellow-500/50'}`}>{revealedDaily !== null ? (<div className={`bungee text-[8px] flex flex-col gap-1 font-black ${revealedDaily === i ? 'text-black' : 'text-white/40'}`}><div className="truncate text-[7px]">💰{DAILY_CARDS[i % 6].coins.toLocaleString()}</div><div className="text-[7px]">🟡{DAILY_CARDS[i % 6].common}</div><div className="text-[7px]">🟢{DAILY_CARDS[i % 6].basic}</div><div className="text-[7px]">🔴{DAILY_CARDS[i % 6].premium}</div></div>) : <span className="text-5xl">🃏</span>}</div>))}</div>{revealedDaily !== null && (<button onClick={() => { const r = DAILY_CARDS[revealedDaily % 6]; updatePlayer({ coins: state.player.coins + r.coins, keys: { common: state.player.keys.common + r.common, basic: state.player.keys.basic + r.basic, premium: state.player.keys.premium + r.premium }, lastDailyReward: Date.now() }); setShowDaily(false); setRevealedDaily(null); }} className="w-full bg-yellow-500 text-black bungee py-6 rounded-3xl text-3xl font-black">REDEEM</button>)}<button onClick={() => { setShowDaily(false); setRevealedDaily(null); }} className="mt-8 bungee text-[10px] text-white/20 font-black uppercase">Close</button></div></div>}
+        {showDaily && <div className="fixed inset-0 z-[1100] bg-black/98 flex items-center justify-center p-6 backdrop-blur-3xl animate-in zoom-in"><div className="bg-slate-900 border-2 border-yellow-500/20 p-10 rounded-[5rem] w-full text-center max-w-sm shadow-2xl"><h2 className="bungee text-4xl text-yellow-500 mb-2 italic uppercase font-black">Vault</h2><p className="bungee text-[10px] text-slate-500 mb-10 uppercase tracking-widest font-black">PICK 1 CARD EVERY 12H</p><div className="grid grid-cols-3 gap-4 mb-10">{Array.from({ length: 6 }).map((_, i) => (<div key={i} onClick={() => { if (revealedDaily !== null) return; const canClaim = Date.now() - (state.player.lastDailyReward || 0) >= 12 * 3600000; if (!canClaim) return showNotification("VAULT LOCKED!", 'error'); setRevealedDaily(i); }} className={`aspect-[2/3] rounded-2xl border-2 flex items-center justify-center transition-all cursor-pointer ${revealedDaily !== null ? (revealedDaily === i ? 'bg-white scale-110 shadow-[0_0_30px_white]' : 'bg-slate-800 border-white/5 opacity-50') : 'bg-slate-800 border-white/5 hover:border-yellow-500/50'}`}>{revealedDaily !== null ? (<div className={`bungee text-[8px] flex flex-col gap-1 font-black ${revealedDaily === i ? 'text-black' : 'text-white/40'}`}><div className="truncate text-[7px]">💰{DAILY_CARDS[i % 6].coins.toLocaleString()}</div><div className="text-[7px]">🟡{DAILY_CARDS[i % 6].common}</div><div className="text-[7px]">🟢{DAILY_CARDS[i % 6].basic}</div><div className="text-[7px]">🔴{DAILY_CARDS[i % 6].premium}</div></div>) : <span className="text-5xl">🃏</span>}</div>))}</div>{revealedDaily !== null && (<button onClick={() => { const r = DAILY_CARDS[revealedDaily % 6]; updatePlayer({ coins: state.player.coins + r.coins, keys: { common: state.player.keys.common + r.common, basic: state.player.keys.basic + r.basic, premium: state.player.keys.premium + r.premium }, lastDailyReward: Date.now() }); setShowDaily(false); setRevealedDaily(null); }} className="w-full bg-yellow-500 text-black bungee py-6 rounded-3xl text-3xl font-black">REDEEM</button>)}<button onClick={() => { setShowDaily(false); setRevealedDaily(null); }} className="mt-8 bungee text-[10px] text-white/20 font-black uppercase">Close</button></div></div>}
       </div>
     </div>
   );
