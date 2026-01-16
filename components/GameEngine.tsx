@@ -304,7 +304,15 @@ export const GameEngine: React.FC<Props> = ({ monster, player, onFinish, weapons
 
   if (!started) return (
     <div className="h-full flex flex-col items-center justify-center bg-slate-950 p-6 text-center animate-in zoom-in">
-      <img src={monster.image} className="w-48 h-48 drop-shadow-[0_0_30px_rgba(255,0,0,0.5)] mb-8" />
+      <div className="relative w-48 h-48 mb-8">
+        <img 
+            src={monster.image} 
+            className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,0,0,0.5)]" 
+            onError={(e) => {
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${monster.name}&background=random&color=fff&size=256`;
+            }}
+        />
+      </div>
       <h2 className="bungee text-4xl text-red-500 mb-2 italic uppercase font-black">{monster.name}</h2>
       <p className="bungee text-slate-400 mb-12 text-sm tracking-widest uppercase font-black">HP: {monster.maxHealth.toLocaleString()}</p>
       <div className="flex gap-6 w-full px-4">
@@ -384,8 +392,14 @@ export const GameEngine: React.FC<Props> = ({ monster, player, onFinish, weapons
         ))}
 
         {/* Monster */}
-        <div className="relative z-10">
-            <img src={monster.image} className={`h-[85%] object-contain transition-all duration-300 drop-shadow-[0_0_50px_rgba(255,0,0,0.4)] ${isPaused ? 'grayscale blur-lg scale-90' : 'scale-110'}`} />
+        <div className="relative z-10 h-full flex items-center justify-center w-1/2 ml-auto">
+            <img 
+                src={monster.image} 
+                className={`h-[85%] w-auto max-w-full object-contain transition-all duration-300 drop-shadow-[0_0_50px_rgba(255,0,0,0.4)] ${isPaused ? 'grayscale blur-lg scale-90' : 'scale-110'}`} 
+                onError={(e) => {
+                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${monster.name}&background=random&color=fff&size=512`;
+                }}
+            />
         </div>
         
         <div className="absolute -bottom-10 right-12 z-[100] bungee text-2xl text-red-500 flex items-center gap-2 font-black italic">
