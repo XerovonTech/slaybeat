@@ -353,14 +353,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#020617] text-white overflow-hidden flex justify-center items-center font-['Inter']">
+    <div className="fixed inset-0 w-full h-full bg-[#020617] text-white overflow-hidden flex justify-center items-center font-['Inter'] touch-none">
       <div className="w-full h-full max-w-md flex flex-col relative overflow-hidden bg-slate-950 shadow-2xl border-x border-white/10">
         
         {renderNotification()}
 
         {state.view === GameView.START && (
           <div className="flex flex-col h-full p-4 animate-in fade-in relative">
-            <div className="flex justify-between items-start z-20 mb-6 h-20">
+            <div className="flex justify-between items-start z-20 mb-6 h-20 shrink-0">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10 bungee text-[10px]">
                    {isEditingName ? (
@@ -407,7 +407,7 @@ const App: React.FC = () => {
 
         {state.view === GameView.INVENTORY && (
           <div className="h-full flex flex-col p-4 bg-slate-950 overflow-hidden animate-in slide-in-from-right">
-             <div className="flex justify-between items-center mb-6">
+             <div className="flex justify-between items-center mb-6 shrink-0">
                <button onClick={() => setState(p => ({ ...p, view: GameView.START }))} className="bungee text-xs bg-slate-800 px-6 py-3 rounded-xl border-2 border-white/10 font-black">BACK</button>
                <button onClick={() => setShowWeaponIndex(true)} className="bungee text-[10px] bg-red-600 px-5 py-3 rounded-xl shadow-lg font-black uppercase">Weapon Index</button>
                <GlobalHUD player={state.player} />
@@ -446,7 +446,7 @@ const App: React.FC = () => {
 
         {state.view === GameView.TEAM && (
           <div className="h-full flex flex-col p-4 bg-slate-950 overflow-hidden animate-in slide-in-from-right">
-             <div className="flex justify-between items-center mb-6">
+             <div className="flex justify-between items-center mb-6 shrink-0">
                <button onClick={() => setState(p => ({ ...p, view: GameView.START }))} className="bungee text-xs bg-slate-800 px-6 py-3 rounded-xl border-2 border-white/10 font-black">BACK</button>
                <h2 className="bungee text-2xl text-blue-400 italic font-black uppercase">TEAM</h2>
                <GlobalHUD player={state.player} />
@@ -601,35 +601,37 @@ const App: React.FC = () => {
 
         {state.view === GameView.LEADERBOARD && (
           <div className="h-full flex flex-col p-4 bg-slate-950 animate-in slide-in-from-right overflow-hidden">
-             <div className="flex justify-between items-center mb-6">
-                <button onClick={() => setState(p => ({ ...p, view: GameView.START }))} className="bungee text-xs bg-slate-800 px-6 py-3 rounded-xl border-2 border-white/10 font-black">BACK</button>
-                <h2 className="bungee text-2xl text-purple-500 italic font-black uppercase">RANKS</h2>
-                <GlobalHUD player={state.player} />
+             <div className="flex justify-between items-center mb-4 shrink-0 px-2 pt-2">
+                <button onClick={() => setState(p => ({ ...p, view: GameView.START }))} className="bungee text-[10px] bg-slate-800 px-4 py-2 rounded-xl border-2 border-white/10 font-black">BACK</button>
+                <h2 className="bungee text-xl text-purple-500 italic font-black uppercase">RANKS</h2>
+                <div className="scale-75 origin-right">
+                    <GlobalHUD player={state.player} />
+                </div>
              </div>
-             <div className="flex gap-1 mb-4 bg-black/40 p-1 rounded-2xl border border-white/5">
+             <div className="flex gap-1 mb-2 bg-black/40 p-1 rounded-2xl border border-white/5 shrink-0 mx-2">
                 {(['points', 'coins', 'level'] as const).map(t => (
                   <button key={t} onClick={() => setRankTab(t)} className={`flex-1 py-3 bungee text-[9px] rounded-xl transition-all font-black uppercase ${rankTab === t ? 'bg-purple-600 text-white' : 'text-white/30'}`}>{t}</button>
                 ))}
              </div>
-             <div className="bg-slate-900/60 p-4 rounded-3xl border border-purple-500/20 mb-4 relative overflow-hidden">
-                <div className="flex justify-between items-center relative z-10">
-                   <div className="flex flex-col">
+             <div className="bg-slate-900/60 p-4 rounded-3xl border border-purple-500/20 mb-2 relative overflow-hidden shrink-0 mx-2">
+                <div className="flex justify-between items-center relative z-10 gap-2">
+                   <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                          <span className="bungee text-[8px] text-white/40 uppercase">Next Reset In</span>
                          <button onClick={() => setShowRewardInfo(true)} className="text-purple-400 bg-purple-900/40 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border border-purple-500/50">i</button>
                       </div>
-                      <span className="bungee text-xl text-white font-black tracking-widest font-mono">{getCountdownString()}</span>
+                      <span className="bungee text-lg sm:text-xl text-white font-black tracking-widest font-mono whitespace-nowrap">{getCountdownString()}</span>
                    </div>
                    <button 
                      onClick={claimRankReward} 
                      disabled={!canClaimRank()}
-                     className={`px-6 py-4 bungee text-[10px] rounded-xl font-black transition-all ${canClaimRank() ? 'bg-green-600 shadow-[0_0_20px_rgba(22,163,74,0.4)] animate-pulse text-white' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+                     className={`px-4 py-3 sm:px-6 sm:py-4 bungee text-[9px] sm:text-[10px] rounded-xl font-black transition-all whitespace-nowrap ${canClaimRank() ? 'bg-green-600 shadow-[0_0_20px_rgba(22,163,74,0.4)] animate-pulse text-white' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
                    >
                      {canClaimRank() ? 'REDEEM PRIZES' : 'LOCKED'}
                    </button>
                 </div>
              </div>
-             <div className="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-2 pb-24">
+             <div className="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-2 pb-24 px-2">
                 {leaderboard.length > 0 ? leaderboard.sort((a,b) => (b as any)[rankTab === 'points' ? 'score' : rankTab] - (a as any)[rankTab === 'points' ? 'score' : rankTab]).map((entry, i) => (
                   <div key={i} className={`flex justify-between items-center p-4 rounded-2xl border-2 ${entry.username === state.player.username ? 'border-purple-500 bg-purple-900/20 shadow-lg' : 'border-white/5 bg-slate-900/40'}`}>
                     <div className="flex items-center gap-4">
@@ -647,12 +649,12 @@ const App: React.FC = () => {
 
         {state.view === GameView.SHOP && (
           <div className="h-full flex flex-col p-4 bg-slate-950 overflow-hidden animate-in slide-in-from-right">
-             <div className="flex justify-between items-center mb-6">
+             <div className="flex justify-between items-center mb-6 shrink-0">
                <button onClick={() => setState(p => ({ ...p, view: GameView.START }))} className="bungee text-xs bg-slate-800 px-6 py-3 rounded-xl border-2 border-white/10 font-black">BACK</button>
                <h2 className="bungee text-2xl text-yellow-500 italic uppercase font-black">Market</h2>
                <GlobalHUD player={state.player} />
              </div>
-             <div className="flex gap-2 mb-6">
+             <div className="flex gap-2 mb-6 shrink-0">
                 <button onClick={() => setShopTab('lootboxes')} className={`flex-1 py-4 bungee text-[10px] rounded-2xl border-2 transition-all font-black ${shopTab === 'lootboxes' ? 'bg-yellow-600 border-white' : 'bg-slate-900 border-white/5 opacity-50'}`}>WEAPON CRATES</button>
                 <button onClick={() => setShopTab('characters')} className={`flex-1 py-4 bungee text-[10px] rounded-2xl border-2 transition-all font-black ${shopTab === 'characters' ? 'bg-blue-600 border-white' : 'bg-slate-900 border-white/5 opacity-50'}`}>CHARACTERS</button>
              </div>
@@ -697,7 +699,7 @@ const App: React.FC = () => {
 
         {state.view === GameView.LEVEL_SELECT && (
           <div className="h-full flex flex-col p-4 bg-slate-950 animate-in slide-in-from-bottom overflow-hidden">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-8 shrink-0">
               <button onClick={() => setState(p => ({ ...p, view: GameView.START }))} className="bungee text-xs bg-slate-800 px-6 py-3 rounded-xl border-2 border-white/10 font-black">BACK</button>
               <h2 className="bungee text-2xl text-red-500 italic uppercase font-black">TITAN MAP</h2>
               <GlobalHUD player={state.player} />
