@@ -84,22 +84,34 @@ export const GameEngine: React.FC<Props> = ({ monster, player, onFinish, weapons
   // 2. Spawn projectile
   // 3. Apply damage on impact
   const spawnProjectile = (mult = 1) => {
-    if (activeWeapons.length === 0) return; // No weapons to throw?
-
-    // 1. Select Character (Source)
-    const charIndex = Math.floor(Math.random() * equippedChars.length);
+    // 1. Select Character (Source) - Fallback to first char if empty (shouldn't happen but safe)
+    const safeChars = equippedChars.length > 0 ? equippedChars : [CHARACTERS[0]];
+    const charIndex = Math.floor(Math.random() * safeChars.length);
     const startX = 12; // 12% from left
     const startY = 15 + (charIndex * 12); // ~15% from top + offset per char
 
     // 2. Select Weapon & Calculate Stats
-    const wIdx = Math.floor(Math.random() * activeWeapons.length);
-    const weapon = activeWeapons[wIdx];
-    const isCrit = Math.random() < (weapon?.critChance || 0.1);
-    
-    let baseDamage = weapon?.damage;
-    if (typeof baseDamage !== 'number' || isNaN(baseDamage)) baseDamage = 100;
-    
-    const damageValue = (isCrit ? (weapon?.critMultiplier || 4.5) : 1) * baseDamage * (1 + (combo * 0.05)) * mult;
+    let icon = '👊';
+    let damageValue = 50;
+    let isCrit = false;
+
+    if (activeWeapons.length > 0) {
+      const wIdx = Math.floor(Math.random() * activeWeapons.length);
+      const weapon = activeWeapons[wIdx];
+      if (weapon) {
+        icon = weapon.icon || '⚔️';
+        isCrit = Math.random() < (weapon.critChance || 0.1);
+        
+        let baseDamage = weapon.damage;
+        if (typeof baseDamage !== 'number' || isNaN(baseDamage)) baseDamage = 100;
+        
+        damageValue = (isCrit ? (weapon.critMultiplier || 4.5) : 1) * baseDamage * (1 + (combo * 0.05)) * mult;
+      }
+    } else {
+      // Fallback damage if no weapon equipped
+      damageValue = 50 * (1 + (combo * 0.05)) * mult;
+      isCrit = Math.random() < 0.05;
+    }
 
     // 3. Determine Trajectory & Target
     const trajectoryTypes: Array<'linear' | 'arc' | 'swirl'> = ['linear', 'linear', 'arc', 'swirl'];
@@ -117,7 +129,7 @@ export const GameEngine: React.FC<Props> = ({ monster, player, onFinish, weapons
 
     const newProj: Projectile = {
         id: Math.random(),
-        icon: weapon?.icon || '⚔️',
+        icon,
         startX,
         startY,
         currentX: startX,

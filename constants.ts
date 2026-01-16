@@ -75,17 +75,35 @@ export const WEAPON_INDEX = [
   ...genPool('Ancient', 60000000, 60, 15, 45)
 ];
 
+const STARTER_WEAPON: Weapon = {
+  id: 'starter_sword',
+  name: 'Recruit Sword',
+  description: 'A basic sword for new fighters.',
+  price: 0,
+  icon: '🗡️',
+  rarity: 'Common',
+  damage: 150,
+  damageMultiplier: 1,
+  extraLives: 3,
+  keyDropBonus: 0,
+  critChance: 0.1,
+  critMultiplier: 2,
+  expBonus: 0,
+  level: 1,
+  maxLevel: 10
+};
+
 export const INITIAL_PLAYER_STATS: PlayerStats = {
   username: "NewFighter",
   exp: 0, expNeeded: 500, level: 1, powerLevel: 100, lives: 30,
-  inventory: [],
+  inventory: [STARTER_WEAPON],
   characters: {
     unlocked: ['c1'],
     fragments: { 'c1': 5 },
     equipped: ['c1'],
     selectedGenders: { 'c1': 'M' }
   },
-  equipped: [],
+  equipped: ['starter_sword'],
   coins: 50000, stagePoints: 0, unlockedLevel: 1, lastDailyReward: 0,
   keys: { common: 100, basic: 50, premium: 20 },
   settings: { musicEnabled: true, soundEnabled: true }
